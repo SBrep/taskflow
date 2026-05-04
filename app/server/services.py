@@ -1,30 +1,89 @@
-from typing import Dict
-from .models import Task
+from .database import get_connection
 
-tasks: Dict[int, Task] = {}
-task_id_counter = 1
+def add_task(title: str):
+    conn = get_connection()
+    cursor = conn.cursor()
 
-def add_task(title: str) -> Task:
-    global task_id_counter
-    task = Task(id=task_id_counter, title=title)
-    tasks[task_id_counter] = task
-    task_id_counter += 1
-    return task
+    cursor.execute(
+        "INSERT INTO tasks (title, status) VALUES (?, ?)",
+        (title, "new")
+    )
+
+    conn.commit()
+
+    task_id = cursor.lastrowid
+    conn.close()
+
+    return {"id": task_id, "title": title, "status": "new"}
+
 
 def get_tasks():
-    return list(tasks.values())
+    conn = get_connection()
+    cursor = conn.cursor()
 
-def get_task(task_id: int) -> Task:
-    return tasks.get(task_id)
+    cursor.execute("SELECT id, title, status FROM tasks")
+    rows = cursor.fetchall()
+    conn.close()
 
-def update_task(task_id: int, status: str) -> Task:
-    task = tasks.get(task_id)
-    if task:
-        task.status = status
-    return task
+    return [
+        {"id": row[0], "title": row[1], "status": row[2]}
+        for row in rows
+    ]
+
+
+def get_task(task_id: int):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "SELECT id, title, status FROM tasks WHERE id = ?",
+        (task_id,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return None
+
+    return {"id": row[0], "title": row[1], "status": row[2]}
+
+
+def update_task(task_id: int, status: str):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "UPDATE tasks SET status = ? WHERE id = ?",
+        (status, task_id)
+    )
+
+    conn.commit()
+
+    if cursor.rowcount == 0:
+        conn.close()
+        return None
+
+    cursor.execute(
+        "SELECT id, title, status FROM tasks WHERE id = ?",
+        (task_id,)
+    )
+    row = cursor.fetchone()
+    conn.close()
+
+    return {"id": row[0], "title": row[1], "status": row[2]}
+
 
 def delete_task(task_id: int):
-    if task_id in tasks:
-        del tasks[task_id]
-        return True
-    return False
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    cursor.execute(
+        "DELETE FROM tasks WHERE id = ?",
+        (task_id,)
+    )
+
+    conn.commit()
+    deleted = cursor.rowcount > 0
+    conn.close()
+
+    return deleted
