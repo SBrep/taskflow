@@ -1,26 +1,25 @@
 from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
 from .routes import router
 from .database import init_db
 from . import state
-import time
-
-app = FastAPI()
 
 
-@app.on_event("startup")
-def startup():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
     init_db()
-
-
-@app.on_event("shutdown")
-def shutdown():
+    print("Taskflow service started")
+    yield
+    # Shutdown
     state.is_shutting_down = True
-    print("Waiting for active requests to finish...")
-
+    print("Shutting down... waiting for active requests to finish")
     while state.active_requests > 0:
-        time.sleep(0.1)
+        await asyncio.sleep(0.1)  # небольшой асинхронный sleep
+    print("Taskflow service stopped gracefully")
 
-    print("Shutdown complete")
 
+app = FastAPI(lifespan=lifespan, title="Taskflow")
 
 app.include_router(router)

@@ -1,95 +1,71 @@
 import time
-from .database import get_connection
+from .database import get_db_connection
+from .external_api import unstable_service
 
 
-def add_task(title: str):
-    # имитация долгой операции
-    time.sleep(2)
-
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "INSERT INTO tasks (title, status) VALUES (?, ?)",
-        (title, "new")
-    )
-
-    conn.commit()
-    task_id = cursor.lastrowid
-    conn.close()
+def add_task(title: str) -> dict:
+    with get_db_connection() as conn:
+        cursor = conn.execute(
+            "INSERT INTO tasks (title, status) VALUES (?, ?)",
+            (title, "new")
+        )
+        conn.commit()
+        task_id = cursor.lastrowid
 
     return {"id": task_id, "title": title, "status": "new"}
 
 
-def get_tasks():
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT id, title, status FROM tasks")
-    rows = cursor.fetchall()
-    conn.close()
-
-    return [
-        {"id": row[0], "title": row[1], "status": row[2]}
-        for row in rows
-    ]
+def get_tasks() -> list[dict]:
+    with get_db_connection() as conn:
+        cursor = conn.execute("SELECT id, title, status FROM tasks")
+        return [dict(row) for row in cursor.fetchall()]
 
 
-def get_task(task_id: int):
-    conn = get_connection()
-    cursor = conn.cursor()
-
-    cursor.execute(
-        "SELECT id, title, status FROM tasks WHERE id = ?",
-        (task_id,)
-    )
-
-    row = cursor.fetchone()
-    conn.close()
-
-    if not row:
-        return None
-
-    return {"id": row[0], "title": row[1], "status": row[2]}
+def get_task(task_id: int) -> dict | None:
+    with get_db_connection() as conn:
+        row = conn.execute(
+            "SELECT id, title, status FROM tasks WHERE id = ?",
+            (task_id,)
+        ).fetchone()
+        return dict(row) if row else None
 
 
-def update_task(task_id: int, status: str):
-    conn = get_connection()
-    cursor = conn.cursor()
+def update_task(task_id: int, status: str) -> dict | None:
+    with get_db_connection() as conn:
+        cursor = conn.execute(
+            "UPDATE tasks SET status = ? WHERE id = ?",
+            (status, task_id)
+        )
+        conn.commit()
 
-    cursor.execute(
-        "UPDATE tasks SET status = ? WHERE id = ?",
-        (status, task_id)
-    )
+        if cursor.rowcount == 0:
+            return None
 
-    conn.commit()
-
-    if cursor.rowcount == 0:
-        conn.close()
-        return None
-
-    cursor.execute(
-        "SELECT id, title, status FROM tasks WHERE id = ?",
-        (task_id,)
-    )
-
-    row = cursor.fetchone()
-    conn.close()
-
-    return {"id": row[0], "title": row[1], "status": row[2]}
+        row = conn.execute(
+            "SELECT id, title, status FROM tasks WHERE id = ?",
+            (task_id,)
+        ).fetchone()
+        return dict(row) if row else None
 
 
-def delete_task(task_id: int):
-    conn = get_connection()
-    cursor = conn.cursor()
+def delete_task(task_id: int) -> bool:
+    with get_db_connection() as conn:
+        cursor = conn.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+        conn.commit()
+        return cursor.rowcount > 0
 
-    cursor.execute(
-        "DELETE FROM tasks WHERE id = ?",
-        (task_id,)
-    )
 
-    conn.commit()
-    deleted = cursor.rowcount > 0
-    conn.close()
+# ====================== ЛР 4 ======================
+def call_external_with_retry(max_retries: int = 3) -> str:
+    attempt = 0
+    delay = 0.2
 
-    return deleted
+    while attempt < max_retries:
+        try:
+            return unstable_service()
+        except Exception as e:
+            attempt += 1
+            if attempt == max_retries:
+                raise
+            time.sleep(delay)
+            delay *= 2  # exponential backoff

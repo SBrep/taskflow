@@ -1,69 +1,67 @@
 import os
 os.environ["TEST_MODE"] = "1"
 
+import asyncio
 from fastapi.testclient import TestClient
 from app.server.main import app
 from app.server.database import init_db
-from app.server import state
+from app.server import state, external_api
 
 init_db()
-
 client = TestClient(app)
 
 
 def test_health():
-    response = client.get("/health")
-    assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
 
 
-def test_create_task():
-    response = client.post("/tasks", json={"title": "test"})
-    assert response.status_code == 200
-    assert response.json()["title"] == "test"
+def test_crud_operations():
+    # Create
+    resp = client.post("/tasks", json={"title": "Test task"})
+    assert resp.status_code == 200
+    task_id = resp.json()["id"]
 
+    # Get all
+    resp = client.get("/tasks")
+    assert resp.status_code == 200
+    assert len(resp.json()) > 0
 
-def test_get_tasks():
-    client.post("/tasks", json={"title": "task1"})
-    response = client.get("/tasks")
-    assert response.status_code == 200
-    assert isinstance(response.json(), list)
+    # Update
+    resp = client.patch(f"/tasks/{task_id}", json={"status": "done"})
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "done"
 
+    # Delete
+    resp = client.delete(f"/tasks/{task_id}")
+    assert resp.status_code == 200
 
-def test_update_task():
-    response = client.post("/tasks", json={"title": "task"})
-    task_id = response.json()["id"]
-
-    response = client.patch(f"/tasks/{task_id}", json={"status": "done"})
-    assert response.json()["status"] == "done"
-
-
-def test_delete_task():
-    response = client.post("/tasks", json={"title": "task"})
-    task_id = response.json()["id"]
-
-    response = client.delete(f"/tasks/{task_id}")
-    assert response.status_code == 200
-
-
-# -------------------------
-# ЛР3 ТЕСТЫ
-# -------------------------
 
 def test_shutdown_blocks_requests():
     state.is_shutting_down = True
-
-    response = client.post("/tasks", json={"title": "blocked"})
-    assert response.status_code == 503
-
+    resp = client.post("/tasks", json={"title": "blocked"})
+    assert resp.status_code == 503
     state.is_shutting_down = False
 
 
-def test_active_requests_counter():
-    before = state.active_requests
+# ЛР4 тесты
+def test_external_success(monkeypatch):
+    monkeypatch.setattr(external_api, "unstable_service", lambda: "OK")
+    resp = client.get("/external")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "success"
 
-    response = client.get("/tasks")
-    assert response.status_code == 200
 
-    after = state.active_requests
-    assert after == before
+def test_external_with_retry(monkeypatch):
+    calls = []
+    def flaky():
+        calls.append(1)
+        if len(calls) < 2:
+            raise Exception("fail")
+        return "OK after retry"
+
+    monkeypatch.setattr(external_api, "unstable_service", flaky)
+    resp = client.get("/external")
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "success"

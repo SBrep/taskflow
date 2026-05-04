@@ -1,6 +1,9 @@
 from fastapi import APIRouter, HTTPException
 from .models import TaskCreate, TaskUpdate
-from .services import add_task, get_tasks, get_task, update_task, delete_task
+from .services import (
+    add_task, get_tasks, get_task,
+    update_task, delete_task, call_external_with_retry
+)
 from . import state
 from functools import wraps
 
@@ -11,14 +14,12 @@ def track_request(func):
     @wraps(func)
     def wrapper(*args, **kwargs):
         if state.is_shutting_down:
-            raise HTTPException(status_code=503, detail="Server is shutting down")
-
+            raise HTTPException(status_code=503, detail="Service is shutting down")
         state.active_requests += 1
         try:
             return func(*args, **kwargs)
         finally:
             state.active_requests -= 1
-
     return wrapper
 
 
@@ -61,5 +62,16 @@ def modify_task(task_id: int, update: TaskUpdate):
 @track_request
 def remove_task(task_id: int):
     if delete_task(task_id):
-        return {"message": "deleted"}
+        return {"message": "Task deleted"}
     raise HTTPException(status_code=404, detail="Task not found")
+
+
+# ЛР4
+@router.get("/external")
+@track_request
+def call_external():
+    try:
+        result = call_external_with_retry()
+        return {"status": "success", "result": result}
+    except Exception:
+        return {"status": "failed"}
