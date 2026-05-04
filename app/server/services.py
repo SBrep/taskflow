@@ -1,6 +1,11 @@
+import time
 from .database import get_connection
 
+
 def add_task(title: str):
+    # имитация долгой операции
+    time.sleep(2)
+
     conn = get_connection()
     cursor = conn.cursor()
 
@@ -10,7 +15,6 @@ def add_task(title: str):
     )
 
     conn.commit()
-
     task_id = cursor.lastrowid
     conn.close()
 
@@ -39,6 +43,7 @@ def get_task(task_id: int):
         "SELECT id, title, status FROM tasks WHERE id = ?",
         (task_id,)
     )
+
     row = cursor.fetchone()
     conn.close()
 
@@ -67,6 +72,7 @@ def update_task(task_id: int, status: str):
         "SELECT id, title, status FROM tasks WHERE id = ?",
         (task_id,)
     )
+
     row = cursor.fetchone()
     conn.close()
 

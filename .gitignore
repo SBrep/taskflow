@@ -16,3 +16,4 @@ env/
 .idea/
 
 data/tasks.db
+data/test_tasks.db

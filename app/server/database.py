@@ -1,10 +1,14 @@
 import sqlite3
 import os
 
-DB_PATH = os.path.join("data", "tasks.db")
+def get_db_path():
+    test_mode = os.getenv("TEST_MODE", "0") == "1"
+    return "data/test_tasks.db" if test_mode else "data/tasks.db"
+
 
 def get_connection():
-    return sqlite3.connect(DB_PATH)
+    return sqlite3.connect(get_db_path())
+
 
 def init_db():
     os.makedirs("data", exist_ok=True)
