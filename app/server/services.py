@@ -1,9 +1,13 @@
 import time
 from .database import get_db_connection
 from .external_api import unstable_service
+from . import state
 
 
 def add_task(title: str) -> dict:
+    with state.lock:                    # Защита общего состояния
+        state.total_requests += 1
+    
     with get_db_connection() as conn:
         cursor = conn.execute(
             "INSERT INTO tasks (title, status) VALUES (?, ?)",
@@ -15,6 +19,16 @@ def add_task(title: str) -> dict:
     return {"id": task_id, "title": title, "status": "new"}
 
 
+def get_stats() -> dict:
+    with state.lock:
+        return {
+            "total_requests": state.total_requests,
+            "active_requests": state.active_requests,
+            "is_shutting_down": state.is_shutting_down
+        }
+
+
+# Остальные функции без изменений
 def get_tasks() -> list[dict]:
     with get_db_connection() as conn:
         cursor = conn.execute("SELECT id, title, status FROM tasks")
@@ -55,11 +69,9 @@ def delete_task(task_id: int) -> bool:
         return cursor.rowcount > 0
 
 
-# ====================== ЛР 4 ======================
 def call_external_with_retry(max_retries: int = 3) -> str:
     attempt = 0
     delay = 0.2
-
     while attempt < max_retries:
         try:
             return unstable_service()
@@ -68,4 +80,4 @@ def call_external_with_retry(max_retries: int = 3) -> str:
             if attempt == max_retries:
                 raise
             time.sleep(delay)
-            delay *= 2  # exponential backoff
+            delay *= 2
