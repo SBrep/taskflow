@@ -94,3 +94,22 @@ def test_stats_endpoint():
     data = resp.json()
     assert "total_requests" in data
     assert "active_requests" in data
+
+# ЛР 6 тесты
+def test_metrics_endpoint():
+    resp = client.get("/metrics")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "total_requests" in data
+    assert "total_errors" in data
+    assert "error_rate_percent" in data
+    assert "total_tasks" in data
+
+
+def test_logging_and_metrics():
+    # Создаём несколько задач
+    for i in range(5):
+        client.post("/tasks", json={"title": f"Metric test {i}"})
+    
+    metrics = client.get("/metrics").json()
+    assert metrics["total_tasks"] >= 5

@@ -29,9 +29,13 @@ def health():
     return {"status": "ok"}
 
 
-# Новый эндпоинт для ЛР 5
 @router.get("/stats")
 def stats():
+    return get_stats()
+
+
+@router.get("/metrics")
+def metrics():
     return get_stats()
 
 

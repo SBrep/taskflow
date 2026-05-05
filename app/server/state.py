@@ -2,7 +2,10 @@ import threading
 
 is_shutting_down: bool = False
 active_requests: int = 0
-total_requests: int = 0          # Новый счётчик для ЛР 5
+total_requests: int = 0
 
-# Блокировка для защиты общего состояния
+# Метрики для ЛР 6
+total_errors: int = 0
+total_tasks_created: int = 0
+
 lock = threading.Lock()
